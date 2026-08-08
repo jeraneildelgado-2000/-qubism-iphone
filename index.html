@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Qubism">
+<title>Qubism iPhone v0.3</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;height:100%;overflow:hidden;background:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial}
+#app{height:100%;display:flex;flex-direction:column}header{height:56px;background:#fff;border-bottom:1px solid #ddd;display:flex;align-items:center;justify-content:space-between;padding:0 9px;z-index:4}
+h1{margin:0;font-size:19px}.muted{font-size:12px;color:#888;font-weight:400}.top{display:flex;gap:6px}button{border:0;border-radius:10px;background:#e8e8e8;padding:8px 10px;font-weight:650;color:#222}button:active{transform:scale(.96)}
+#scene{position:relative;flex:1;min-height:0}canvas{display:block;width:100%;height:100%;touch-action:none}
+#hint{position:absolute;top:9px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#ffffffdc;border-radius:15px;padding:6px 10px;color:#555;font-size:11px;pointer-events:none}
+#info{position:absolute;left:9px;bottom:9px;background:#ffffffdc;border-radius:11px;padding:6px 8px;font-size:11px;color:#555}
+#colors{height:48px;display:flex;align-items:center;gap:8px;padding:6px 9px;background:#fafafa;border-top:1px solid #ddd}.sw{width:29px;height:29px;border-radius:50%;border:2px solid white;box-shadow:0 0 0 1px #aaa}.sel{box-shadow:0 0 0 2px #111}
+#tools{background:#fff;border-top:1px solid #ddd;padding:7px 7px calc(7px + env(safe-area-inset-bottom));display:flex;gap:6px;overflow:auto}.tool{min-width:67px}.tool b{display:block;font-size:18px}.tool small{font-size:10px;color:#666}
+#face{background:#dceeff}
+</style></head><body><div id="app">
+<header><h1>Qubism <span class="muted">iPhone · 0.3</span></h1><div class="top"><button id="undo">↶</button><button id="redo">↷</button><button id="save">Guardar</button></div></header>
+<div id="scene"><canvas id="c"></canvas><div id="hint">Toca una cara · arrastra para modelar · dos dedos para navegar</div><div id="info"></div></div>
+<div id="colors">
+<div class="sw sel" data-c="#e53935" style="background:#e53935"></div><div class="sw" data-c="#43a047" style="background:#43a047"></div><div class="sw" data-c="#1e88e5" style="background:#1e88e5"></div><div class="sw" data-c="#8e24aa" style="background:#8e24aa"></div><div class="sw" data-c="#fb8c00" style="background:#fb8c00"></div><div class="sw" data-c="#fdd835" style="background:#fdd835"></div><div class="sw" data-c="#546e7a" style="background:#546e7a"></div>
+</div>
+<div id="tools">
+<button class="tool" id="add"><b>＋</b><small>Cubo</small></button><button class="tool" id="del"><b>⌫</b><small>Borrar</small></button>
+<button class="tool" id="face"><b>◇</b><small>Caras</small></button><button class="tool" id="grid"><b>▦</b><small>Rejilla</small></button>
+<button class="tool" id="rot"><b>⟳</b><small>Rotar</small></button><button class="tool" id="mirror"><b>⇄</b><small>Reflejar</small></button>
+<button class="tool" id="dup"><b>⧉</b><small>Duplicar</small></button><button class="tool" id="center"><b>⌾</b><small>Centrar</small></button>
+<button class="tool" id="png"><b>▣</b><small>PNG</small></button><button class="tool" id="json"><b>⇩</b><small>Proyecto</small></button><button class="tool" id="new"><b>✕</b><small>Nuevo</small></button>
+</div></div>
+<script>
+const cv=document.getElementById('c'),x=cv.getContext('2d'),info=document.getElementById('info');let cubes=[newCube(0,0,0)],sel=0,face=4,colors='#e53935',grid=true,faceMode=true;
+let yaw=-.65,pitch=.55,zoom=105,panX=0,panY=0,hist=[],future=[];
+function newCube(X,Y,Z){return{x:X,y:Y,z:Z,sx:1,sy:1,sz:1,color:colors,e:{px:0,nx:0,py:0,ny:0,pz:0,nz:0}}}
+const FS=[{n:'frontal',k:'nz',a:'z',d:-1,s:.78},{n:'trasera',k:'pz',a:'z',d:1,s:.92},{n:'inferior',k:'ny',a:'y',d:-1,s:.70},{n:'superior',k:'py',a:'y',d:1,s:1},{n:'derecha',k:'px',a:'x',d:1,s:.86},{n:'izquierda',k:'nx',a:'x',d:-1,s:.62}], F=[[0,1,2,3],[4,7,6,5],[0,4,5,1],[3,2,6,7],[1,5,6,2],[0,3,7,4]];
+function snap(){return JSON.stringify(cubes)}function histPush(){hist.push(snap());if(hist.length>80)hist.shift();future=[]}
+function restore(s){cubes=JSON.parse(s);sel=Math.min(sel,cubes.length-1);draw()}
+function undo(){if(hist.length){future.push(snap());restore(hist.pop())}}function redo(){if(future.length){hist.push(snap());restore(future.pop())}}
+function resize(){let r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=r.width*d;cv.height=r.height*d;x.setTransform(d,0,0,d,0,0);draw()}addEventListener('resize',resize);
+function R(p){let[X,Y,Z]=p,cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch),a=X*cy-Z*sy,z=X*sy+Z*cy;return[a,Y*cp-z*sp,Y*sp+z*cp]}
+function P(p){let[X,Y,Z]=R(p),f=zoom/(1+Z*.035);return[cv.clientWidth/2+panX+X*f,cv.clientHeight/2+panY-Y*f,Z]}
+function V(q){let a=q.sx/2,b=q.sy/2,c=q.sz/2,e=q.e;return[[q.x-b*0+a*0-q.sx/2-e.nx,q.y-b-e.ny,q.z-c-e.nz],[q.x+q.sx/2+e.px,q.y-b-e.ny,q.z-c-e.nz],[q.x+q.sx/2+e.px,q.y+q.sy/2+e.py,q.z-c-e.nz],[q.x-q.sx/2-e.nx,q.y+q.sy/2+e.py,q.z-c-e.nz],[q.x-q.sx/2-e.nx,q.y-b-e.ny,q.z+q.sz/2+e.pz],[q.x+q.sx/2+e.px,q.y-b-e.ny,q.z+q.sz/2+e.pz],[q.x+q.sx/2+e.px,q.y+q.sy/2+e.py,q.z+q.sz/2+e.pz],[q.x-q.sx/2-e.nx,q.y+q.sy/2+e.py,q.z+q.sz/2+e.pz]].map(P)}
+function shade(h,k){let n=parseInt(h.slice(1),16),r=n>>16,g=n>>8&255,b=n&255;return`rgb(${r*k|0},${g*k|0},${b*k|0})`}
+function draw(){let W=cv.clientWidth,H=cv.clientHeight;x.clearRect(0,0,W,H);x.fillStyle='#f4f4f4';x.fillRect(0,0,W,H);if(grid){x.strokeStyle='rgba(70,70,70,.10)';x.lineWidth=1;for(let i=-10;i<=10;i++){let a=P([i,-1.5,-10]),b=P([i,-1.5,10]),c=P([-10,-1.5,i]),d=P([10,-1.5,i]);x.beginPath();x.moveTo(a[0],a[1]);x.lineTo(b[0],b[1]);x.stroke();x.beginPath();x.moveTo(c[0],c[1]);x.lineTo(d[0],d[1]);x.stroke()}}
+let q=[];cubes.forEach((z,i)=>{let v=V(z);F.forEach((f,j)=>q.push({v:f.map(k=>v[k]),z:f.reduce((s,k)=>s+v[k][2],0)/4,i,j,c:z}))});q.sort((a,b)=>a.z-b.z);q.forEach(o=>{x.beginPath();x.moveTo(o.v[0][0],o.v[0][1]);o.v.slice(1).forEach(p=>x.lineTo(p[0],p[1]));x.closePath();x.fillStyle=shade(o.c.color,[.78,.92,.70,1,.86,.62][o.j]);x.fill();x.lineWidth=o.i===sel&&o.j===face&&faceMode?3:1.2;x.strokeStyle=o.i===sel&&o.j===face&&faceMode?'#111':'rgba(0,0,0,.72)';x.stroke()});info.textContent=cubes.length?`Cubo ${sel+1}/${cubes.length} · ${FS[face].n}`:'Sin cubos'}
+function hit(px,py){let best={i:-1,j:-1,d:1e9};cubes.forEach((q,i)=>{let v=V(q);F.forEach((f,j)=>{let p=f.map(k=>v[k]),cx=p.reduce((s,z)=>s+z[0],0)/4,cy=p.reduce((s,z)=>s+z[1],0)/4,d=Math.hypot(px-cx,py-cy);if(d<best.d&&d<Math.max(55,q.sx*zoom*.7))best={i,j,d}})});return best}
+function extrude(q,j,amount){let f=FS[j];q.e=q.e||{};q.e[f.k]=Math.max(-.45,Math.min(4,q.e[f.k]+amount))}
+let g=null;
+cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);let h=hit(e.clientX,e.clientY);if(h.i>=0){sel=h.i;face=h.j}let p={x:e.clientX,y:e.clientY};if(!g)g={t:1,id:e.pointerId,last:p,changed:false};else if(g.t===1){g.t=2;g.id2=e.pointerId;g.p2=p;g.base={yaw,pitch,zoom,start:g.last}}draw()};
+cv.onpointermove=e=>{if(!g)return;if(g.t===1&&e.pointerId===g.id){let dx=e.clientX-g.last.x,dy=e.clientY-g.last.y;if(sel>=0&&faceMode){if(!g.changed){histPush();g.changed=true}let q=cubes[sel],f=FS[face];q.e[f.k]=Math.max(-.45,Math.min(4,q.e[f.k]+(f.a==='x'?dx:(f.a==='y'?-dy:dy))/(zoom*1.8)));draw()}g.last={x:e.clientX,y:e.clientY}}else if(g.t===2&&e.pointerId===g.id2){g.p2={x:e.clientX,y:e.clientY};let dx=e.clientX-g.base.start.x,dy=e.clientY-g.base.start.y,dist=Math.hypot(g.p2.x-g.base.start.x,g.p2.y-g.base.start.y),baseDist=Math.max(20,Math.hypot(g.last.x-g.base.start.x,g.last.y-g.base.start.y));zoom=Math.max(45,Math.min(280,g.base.zoom*dist/baseDist));yaw=g.base.yaw+dx*.008;pitch=Math.max(-1.1,Math.min(1.1,g.base.pitch-dy*.006));draw()}}
+cv.onpointerup=()=>g=null;cv.onpointercancel=()=>g=null;
+document.getElementById('add').onclick=()=>{histPush();cubes.push(newCube(0,0,cubes.length?1:0));sel=cubes.length-1;draw()};
+document.getElementById('del').onclick=()=>{if(sel>=0){histPush();cubes.splice(sel,1);sel=Math.min(sel,cubes.length-1);draw()}};
+document.getElementById('face').onclick=()=>{faceMode=!faceMode;document.getElementById('face').style.background=faceMode?'#dceeff':'#e8e8e8';draw()};
+document.getElementById('grid').onclick=()=>{grid=!grid;draw()};
+document.getElementById('rot').onclick=()=>{if(sel>=0){histPush();let q=cubes[sel],t=q.sx;q.sx=q.sz;q.sz=t;draw()}};
+document.getElementById('mirror').onclick=()=>{if(sel>=0){histPush();let q=cubes[sel],t=q.e.px;q.e.px=q.e.nx;q.e.nx=t;t=q.e.pz;q.e.pz=q.e.nz;q.e.nz=t;draw()}};
+document.getElementById('dup').onclick=()=>{if(sel>=0){histPush();let q=JSON.parse(JSON.stringify(cubes[sel]));q.x+=1.1;sel=cubes.push(q)-1;draw()}};
+document.getElementById('center').onclick=()=>{yaw=-.65;pitch=.55;zoom=105;panX=panY=0;draw()};
+document.getElementById('undo').onclick=undo;document.getElementById('redo').onclick=redo;
+document.getElementById('save').onclick=()=>{localStorage.setItem('qubism-v03',snap());alert('Proyecto guardado.')};
+document.getElementById('new').onclick=()=>{if(confirm('¿Crear un proyecto nuevo?')){histPush();cubes=[];sel=-1;draw()}};
+document.getElementById('png').onclick=()=>{let a=document.createElement('a');a.download='qubism.png';a.href=cv.toDataURL();a.click()};
+document.getElementById('json').onclick=()=>{let b=new Blob([snap()],{type:'application/json'}),a=document.createElement('a');a.download='qubism-proyecto.json';a.href=URL.createObjectURL(b);a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+document.querySelectorAll('.sw').forEach(s=>s.onclick=()=>{document.querySelectorAll('.sw').forEach(z=>z.classList.remove('sel'));s.classList.add('sel');colors=s.dataset.c;if(sel>=0)cubes[sel].color=colors;draw()});
+let saved=localStorage.getItem('qubism-v03');if(saved)try{cubes=JSON.parse(saved)}catch(e){}resize();
+</script></body></html>
